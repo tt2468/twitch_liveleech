@@ -55,41 +55,46 @@ def check_generate_path(pathPrefix):
         logging.info('Creating directory: {}'.format(dir))
         os.makedirs(dir)
 
-while True:
-    logging.info('Sleeping for {} seconds...'.format(sleepDuration))
-    time.sleep(sleepDuration)
-    logging.info('Done.')
+if __name__ == '__main__':
+    if not twitchClientId or not twitchAuthorization:
+        logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_AUTHORIZATION env variable(s).')
+        return
 
-    try:
-        streams = sl.streams('https://twitch.tv/{}'.format(channelName))
-    except streamlink.exceptions.PluginError:
-        logging.error('Failed to fetch stream via streamlink.')
-        continue
-    if not streams:
-        logging.info('No streams are available.')
-        continue
-    elif 'best' not in streams:
-        logging.error('`best` stream not available!')
-        break
-    logging.info('Stream found! Opening ffmpeg...')
+    while True:
+        logging.info('Sleeping for {} seconds...'.format(sleepDuration))
+        time.sleep(sleepDuration)
+        logging.info('Done.')
 
-    fullDownloadPath = '{}/{}.flv'.format(downloadPath, int(time.time()))
-    logging.info('Writing download to: {}...'.format(fullDownloadPath))
-    stream = ffmpeg.input(streams['best'].url).output(fullDownloadPath, vcodec='copy', acodec='aac')
-    out, err = ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
-    append_file('twitch_ll_download.log', err)
-    logging.info('Stream ended!')
+        try:
+            streams = sl.streams('https://twitch.tv/{}'.format(channelName))
+        except streamlink.exceptions.PluginError:
+            logging.error('Failed to fetch stream via streamlink.')
+            continue
+        if not streams:
+            logging.info('No streams are available.')
+            continue
+        elif 'best' not in streams:
+            logging.error('`best` stream not available!')
+            break
+        logging.info('Stream found! Opening ffmpeg...')
 
-    check_generate_path(finalPath)
+        fullDownloadPath = '{}/{}.flv'.format(downloadPath, int(time.time()))
+        logging.info('Writing download to: {}...'.format(fullDownloadPath))
+        stream = ffmpeg.input(streams['best'].url).output(fullDownloadPath, vcodec='copy', acodec='aac')
+        out, err = ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+        append_file('twitch_ll_download.log', err)
+        logging.info('Stream ended!')
 
-    title = get_channel_title()
-    validChars = "-.() %s%s" % (string.ascii_letters, string.digits)
-    title = ''.join(c for c in title if c in validChars)
+        check_generate_path(finalPath)
 
-    date = datetime.date.today()
-    fullPath = '{}/{}_{}/{}_{}_{}.mp4'.format(finalPath, months[date.month - 1], date.year, date.day, title, int(time.time()))
-    logging.info('Muxing file {} to final path {}'.format(fullDownloadPath, fullPath))
-    mux = ffmpeg.input(fullDownloadPath).output(fullPath, vcodec='copy', acodec='copy')
-    out, err = ffmpeg.run(mux, capture_stdout=True, capture_stderr=True)
-    append_file('twitch_ll_mux.log', err)
-    logging.info('Done.')
+        title = get_channel_title()
+        validChars = "-.() %s%s" % (string.ascii_letters, string.digits)
+        title = ''.join(c for c in title if c in validChars)
+
+        date = datetime.date.today()
+        fullPath = '{}/{}_{}/{}_{}_{}.mp4'.format(finalPath, months[date.month - 1], date.year, date.day, title, int(time.time()))
+        logging.info('Muxing file {} to final path {}'.format(fullDownloadPath, fullPath))
+        mux = ffmpeg.input(fullDownloadPath).output(fullPath, vcodec='copy', acodec='copy')
+        out, err = ffmpeg.run(mux, capture_stdout=True, capture_stderr=True)
+        append_file('twitch_ll_mux.log', err)
+        logging.info('Done.')
