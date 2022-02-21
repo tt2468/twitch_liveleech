@@ -58,7 +58,7 @@ def check_generate_path(pathPrefix):
 if __name__ == '__main__':
     if not twitchClientId or not twitchAuthorization:
         logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_AUTHORIZATION env variable(s).')
-        return
+        os._exit(1)
 
     while True:
         logging.info('Sleeping for {} seconds...'.format(sleepDuration))
