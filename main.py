@@ -19,7 +19,7 @@ import streamlink
 import ffmpeg
 
 twitchClientId = os.getenv('TWITCH_LIVELEECH_CLIENT_ID')
-twitchAuthorization = os.getenv('TWITCH_LIVELEECH_AUTHORIZATION')
+twitchClientSecret = os.getenv('TWITCH_LIVELEECH_CLIENT_SECRET')
 
 months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
 sleepDuration = 45
@@ -35,6 +35,11 @@ def append_file(fileName, data):
         f.write(data.decode())
 
 def get_channel_title():
+    req = requests.post('https://id.twitch.tv/oauth2/token?client_id={}&client_secret={}&grant_type=client_credentials'.format(twitchClientId, twitchClientSecret))
+    if req.status_code != requests.codes.ok:
+        logging.warning('Failed to get Twitch app auth token due to HTTP error. Code: {} | Text: {}'.format(req.status_code, req.text))
+        return 'UNKNOWN TITLE'
+    twitchAuthorization = req.json()['access_token']
     headers = {'Client-Id': twitchClientId, 'Authorization': 'Bearer ' + twitchAuthorization}
     req = requests.get('https://api.twitch.tv/helix/users?login={}'.format(channelName.lower()), headers=headers)
     if req.status_code != requests.codes.ok:
@@ -56,8 +61,8 @@ def check_generate_path(pathPrefix):
         os.makedirs(dir)
 
 if __name__ == '__main__':
-    if not twitchClientId or not twitchAuthorization:
-        logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_AUTHORIZATION env variable(s).')
+    if not twitchClientId or not twitchClientSecret:
+        logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_CLIENT_SECRET env variable(s).')
         os._exit(1)
 
     while True:
