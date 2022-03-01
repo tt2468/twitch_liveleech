@@ -35,10 +35,10 @@ def append_file(fileName, data):
         f.write(data.decode())
 
 def get_channel_title():
-    headers = {'Client-ID': twitchClientId, 'Authorization': 'Bearer ' + twitchAuthorization}
+    headers = {'Client-Id': twitchClientId, 'Authorization': 'Bearer ' + twitchAuthorization}
     req = requests.get('https://api.twitch.tv/helix/users?login={}'.format(channelName.lower()), headers=headers)
     if req.status_code != requests.codes.ok:
-        logging.warning('Failed to get channel title due to HTTP error. Code: {} | Text: {}'.format(req.status_code, req.text))
+        logging.warning('Failed to get Twitch user id due to HTTP error. Code: {} | Text: {}'.format(req.status_code, req.text))
         return 'UNKNOWN TITLE'
     channelId = req.json()['data'][0]['id']
     req = requests.get('https://api.twitch.tv/helix/channels?broadcaster_id={}'.format(channelId), headers=headers)
