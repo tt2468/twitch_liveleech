@@ -17,12 +17,14 @@ import requests
 import streamlink
 import ffmpeg
 
+CHECK_SLEEP_DURATION = 45 # Seconds
+FMP4_FRAGMENT_DURATION = 60 # Seconds
+
 twitchClientId = os.getenv('TWITCH_LIVELEECH_CLIENT_ID')
 twitchClientSecret = os.getenv('TWITCH_LIVELEECH_CLIENT_SECRET')
 twitchApiHeader = os.getenv('TWITCH_LIVELEECH_API_HEADER') or ''
 
 months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-sleepDuration = 45
 
 def append_file(fileName, data):
     with open(fileName, 'a') as f:
@@ -73,8 +75,8 @@ if __name__ == '__main__':
     plugin = pluginClass(session, resolvedUrl, options)
 
     while True:
-        logging.debug('Sleeping for {} seconds...'.format(sleepDuration))
-        time.sleep(sleepDuration)
+        logging.debug('Sleeping for {} seconds...'.format(CHECK_SLEEP_DURATION))
+        time.sleep(CHECK_SLEEP_DURATION)
         logging.debug('Done.')
 
         try:
@@ -105,7 +107,7 @@ if __name__ == '__main__':
         path = check_generate_dir(title)
 
         logging.info('Writing download to: {}...'.format(path))
-        stream = ffmpeg.input(streams['best'].url).output(path, vcodec = 'copy', acodec = 'aac', frag_duration = 60000000, movflags = 'empty_moov+delay_moov')
+        stream = ffmpeg.input(streams['best'].url).output(path, vcodec = 'copy', acodec = 'aac', frag_duration = 1000000 * FMP4_FRAGMENT_DURATION, movflags = 'empty_moov+delay_moov')
         try:
             out, err = ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
             append_file('twitch_ll_download_{}.log'.format(channelName), err)
