@@ -17,8 +17,8 @@ import requests
 import streamlink
 import ffmpeg
 
-CHECK_SLEEP_DURATION = 45 # Seconds
-FMP4_FRAGMENT_DURATION = 60 # Seconds
+CHECK_SLEEP_DURATION = 60 # Seconds
+FMP4_FRAGMENT_DURATION = 240 # Seconds
 
 twitchClientId = os.getenv('TWITCH_LIVELEECH_CLIENT_ID')
 twitchClientSecret = os.getenv('TWITCH_LIVELEECH_CLIENT_SECRET')
