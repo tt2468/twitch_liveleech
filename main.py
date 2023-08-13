@@ -10,6 +10,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG, handlers=[logging.FileHandler('twitch_ll_{}.log'.format(channelName)), logging.StreamHandler()], format="%(asctime)s [%(levelname)s] %(message)s")
 
 import os
+import signal
 import string
 import time
 import datetime
@@ -18,6 +19,7 @@ import streamlink
 import ffmpeg
 
 CHECK_SLEEP_DURATION = 60 # Seconds
+VOD_SEGMENT_DURATION = 3600 * 6 # 6 Hours
 FMP4_FRAGMENT_DURATION = 240 # Seconds
 
 twitchClientId = os.getenv('TWITCH_LIVELEECH_CLIENT_ID')
@@ -25,11 +27,13 @@ twitchClientSecret = os.getenv('TWITCH_LIVELEECH_CLIENT_SECRET')
 twitchApiHeader = os.getenv('TWITCH_LIVELEECH_API_HEADER') or ''
 
 months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+exit = False # This should be mutexed. TODO I guess.
+proc = None
 
 def append_file(fileName, data):
     with open(fileName, 'a') as f:
         f.write('\n======================================================================\n')
-        f.write(data.decode())
+        f.write(data)
 
 def get_channel_title():
     req = requests.post('https://id.twitch.tv/oauth2/token?client_id={}&client_secret={}&grant_type=client_credentials'.format(twitchClientId, twitchClientSecret))
@@ -56,13 +60,19 @@ def check_generate_dir(title):
     if not os.path.exists(dir):
         logging.info('Creating directory: {}'.format(dir))
         os.makedirs(dir)
-    path = '{}/{}_{}_{}.mp4'.format(dir, date.day, title, int(time.time()))
+    path = '{}/{}_{}_{}_%03d.mp4'.format(dir, date.day, title, int(time.time()))
     return path
 
-if __name__ == '__main__':
-    if not twitchClientId or not twitchClientSecret:
-        logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_CLIENT_SECRET env variable(s).')
-        os._exit(1)
+def signal_handler(sig, frame):
+    print('\nCTRL-C captured - exiting...')
+    global exit
+    exit = True
+    if proc:
+        proc.send_signal(signal.SIGINT)
+
+def main():
+    global exit
+    global proc
 
     session = streamlink.session.Streamlink()
     options = streamlink.options.Options()
@@ -74,10 +84,18 @@ if __name__ == '__main__':
     _, pluginClass, resolvedUrl = session.resolve_url('https://twitch.tv/{}'.format(channelName))
     plugin = pluginClass(session, resolvedUrl, options)
 
-    while True:
+    signal.signal(signal.SIGINT, signal_handler)
+
+    while not exit:
         logging.debug('Sleeping for {} seconds...'.format(CHECK_SLEEP_DURATION))
-        time.sleep(CHECK_SLEEP_DURATION)
+        waitUntil = time.time() + CHECK_SLEEP_DURATION
+        while time.time() < waitUntil: # Interruptable sleep, non-async python has no cond wait_until
+            if exit:
+                break
+            time.sleep(0.5)
         logging.debug('Done.')
+        if exit:
+            break
 
         try:
             streams = plugin.streams()
@@ -107,10 +125,28 @@ if __name__ == '__main__':
         path = check_generate_dir(title)
 
         logging.info('Writing download to: {}...'.format(path))
-        stream = ffmpeg.input(streams['best'].url).output(path, vcodec = 'copy', acodec = 'aac', frag_duration = 1000000 * FMP4_FRAGMENT_DURATION, movflags = 'empty_moov+delay_moov')
+        fragDuration = 1000000 * FMP4_FRAGMENT_DURATION
+        stream = ffmpeg.input(streams['best'].url).output(path,
+            vcodec = 'copy',
+            acodec = 'aac',
+            format = 'segment',
+            segment_format = 'mp4',
+            segment_format_options = 'frag_duration={}:movflags=empty_moov+delay_moov'.format(fragDuration),
+            segment_time = VOD_SEGMENT_DURATION,
+            segment_list_type = 'flat'
+        )
+        proc = ffmpeg.run_async(stream, pipe_stderr = True)
         try:
-            out, err = ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
-            append_file('twitch_ll_download_{}.log'.format(channelName), err)
+            _, err = proc.communicate()
+            append_file('twitch_ll_download_{}.log'.format(channelName), err.decode())
             logging.info('Stream ended!')
-        except:
-            logging.exception('FFmpeg library returned error:\n')
+        except Exception as e:
+            logging.exception('Process communicate returned error:\n')
+        proc = None
+
+if __name__ == '__main__':
+    if not twitchClientId or not twitchClientSecret:
+        logging.critical('Missing TWITCH_LIVELEECH_CLIENT_ID or TWITCH_LIVELEECH_CLIENT_SECRET env variable(s).')
+        os._exit(1)
+
+    main()
