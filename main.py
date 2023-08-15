@@ -20,7 +20,7 @@ import ffmpeg
 
 CHECK_SLEEP_DURATION = 60 # Seconds
 VOD_SEGMENT_DURATION = 3600 * 6 # 6 Hours
-FMP4_FRAGMENT_DURATION = 240 # Seconds
+FMP4_FRAGMENT_DURATION = 30 # Seconds
 
 twitchClientId = os.getenv('TWITCH_LIVELEECH_CLIENT_ID')
 twitchClientSecret = os.getenv('TWITCH_LIVELEECH_CLIENT_SECRET')
@@ -86,13 +86,14 @@ def main():
 
     signal.signal(signal.SIGINT, signal_handler)
 
+    waitUntil = 0
     while not exit:
         logging.debug('Sleeping for {} seconds...'.format(CHECK_SLEEP_DURATION))
-        waitUntil = time.time() + CHECK_SLEEP_DURATION
         while time.time() < waitUntil: # Interruptable sleep, non-async python has no cond wait_until
             if exit:
                 break
             time.sleep(0.5)
+        waitUntil = time.time() + CHECK_SLEEP_DURATION
         logging.debug('Done.')
         if exit:
             break
@@ -133,13 +134,14 @@ def main():
             segment_format = 'mp4',
             segment_format_options = 'frag_duration={}:movflags=empty_moov+delay_moov'.format(fragDuration),
             segment_time = VOD_SEGMENT_DURATION,
-            segment_list_type = 'flat'
+            reset_timestamps = 1
         )
         proc = ffmpeg.run_async(stream, pipe_stderr = True)
         try:
             _, err = proc.communicate()
             append_file('twitch_ll_download_{}.log'.format(channelName), err.decode())
             logging.info('Stream ended!')
+            waitUntil = 0 # Don't sleep after a download session in case stream is still live
         except Exception as e:
             logging.exception('Process communicate returned error:\n')
         proc = None
