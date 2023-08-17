@@ -1,3 +1,4 @@
 requests
+shortuuid
 streamlink
 ffmpeg-python
